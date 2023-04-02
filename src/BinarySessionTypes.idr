@@ -18,9 +18,13 @@ data Actions : Type where
 data Channel : Actions -> Type where
     CloseChannel  : Channel Close
     CreateChannel : (actions : Actions) -> Channel actions
-    PushMessage   : Serialise ty => (1 _ : Channel (Send ty next)) -> (v : ty) -> Channel (next v)
-    PopMessage    : Serialise ty => (1 _ : Channel (Recv ty next)) -> (v : ty) -> Channel (next v)
 
+
+PushMessage : Serialise ty => (1 _ : Channel (Send ty next)) -> (v : ty) -> Channel (next v)
+PushMessage (CreateChannel (Send ty next)) v = CreateChannel (next v)
+
+PopMessage : Serialise ty => (1 _ : Channel (Recv ty next)) -> (v : ty) -> Channel (next v)
+PopMessage (CreateChannel (Recv ty next)) v = CreateChannel (next v)
 
 
 namespace Proto
@@ -71,11 +75,9 @@ recv chan = do _ <- putStrLn "Receiving value"
                pure1 (v' # x)
 
 
-close : (1 chan : Channel a) -> L IO ()
+close : (1 chan : Channel Close) -> L IO ()
 close CloseChannel = pure ()
-close (CreateChannel actions) = pure ()
-close (PushMessage c _) = close c
-close (PopMessage  c _) = close c
+close (CreateChannel Close) = pure ()
 
 
 fork : ((1 chan : Server p) -> L IO ()) -> L IO {use=1} (Client p)

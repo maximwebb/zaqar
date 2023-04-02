@@ -1,0 +1,15 @@
+package Zaqar
+
+sourcedir = "src"
+builddir  = "build"
+outputdir = "out"
+depends   = base, linear
+
+modules = BinarySessionTypes
+        , MultiPartySessionTypes
+        , Serialise
+        , Main
+
+
+executable = app
+main       = Main
