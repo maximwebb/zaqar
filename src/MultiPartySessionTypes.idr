@@ -1,78 +1,70 @@
-module MultiPartySessionTypes
+module Mergeable
 
 import Serialise
 
 import Control.Linear.LIO
 import Data.List.Quantifiers
+import Data.List.Elem
 import Data.List1
 import Data.String
+import Data.Vect
 
-data Actions : Type where
-    Send  : (dst : Nat) -> (a : Type) -> (a -> Actions) -> Actions
-    Recv  : (src : Nat) -> (a : Type) -> (a -> Actions) -> Actions
-    Close : Actions
+zero : Fin 3
+zero = FZ
 
+one : Fin 3
+one = FS FZ
+
+two : Fin 3
+two = FS (FS FZ)
+
+mutual
+    data Actions : Type where
+        Select  : (dst : Nat) -> (List (Nat, Type, Actions)) -> Actions
+        Offer   : (src : Nat) -> (List (Nat, Type, Actions)) -> Actions
+        Close   : Actions
+    
 
 data Channel : Actions -> Type where
     CloseChannel  : Channel Close
     CreateChannel : (actions : Actions) -> Channel actions
 
 
-PushMessage : Serialise ty => (1 _ : Channel (Send dst ty next)) -> (v : ty) -> Channel (next v)
-PushMessage (CreateChannel (Send dst ty next)) v = CreateChannel (next v)
+data AllEqual : List a -> Type where
+    Empty     : AllEqual []
+    Singleton : (x : a) -> AllEqual [x]
+    Cons      : (y : a) -> AllEqual (x :: xs) -> x = y -> AllEqual (y :: x :: xs)
 
-PopMessage : Serialise ty => (1 _ : Channel (Recv src ty next)) -> (v : ty) -> Channel (next v)
-PopMessage (CreateChannel (Recv src ty next)) v = CreateChannel (next v)
-
-
-namespace Global
-    public export
-    data Global : Type -> Type where
-        Message : (src : Nat) -> (dst : Nat) -> (a : Type) -> Global b -> Global b
-        Done    : Global ()
+third : (a, b, c) -> c
+third (x, y, z) = z
 
 
-Project : Global a -> (p : Nat) -> Actions
-Project (Message src dst a next) p = if p == src then Send dst a (\c => Project next p)
-                                     else if p == dst then Recv src a (\c => Project next p)
-                                     else Project next p
-Project Done _ = Close
+getValid : {k : Nat} -> (x : Fin k) -> (y : Fin k) -> List (Fin k)
+getValid x y = filter (\z => z /= x && z /= y) (allFins k) where
+                                                allFins : (k : Nat) -> List (Fin k)
+                                                allFins 0 = []
+                                                allFins (S k) = FZ :: (FS <$> allFins k)
 
 
-ProjectToChannel : Global a -> (p : Nat) -> Type
-ProjectToChannel g p = Channel (Project g p)
+mutual
+    data Global : Nat -> Type where
+        Done      : Global n
+        Message   : (src : Fin n) -> (dst : Fin n)
+                  -> (gs : List (Nat, Type, Global n))
+                  -> (0 prf3 : All (\p => AllEqual ((\tup => project (third tup) p) <$> gs)) (getValid src dst))
+                  => Global n
 
 
-send : Serialise ty => (1 chan : Channel (Send dst ty next)) -> (val : ty) -> L IO {use=1} (Channel (next val))
-send chan val = do _ <- putStrLn "Sending value"
-                   _ <- putStrLn $ show val
-                   pure1 (PushMessage chan val)
+    project : (g : Global n) -> (p : Fin n) -> Actions
+    project Done _ = Close
+    project (Message src dst gs) p = if      p == src then Select (finToNat dst) (map (\(l,a,g) => (l,a, project g p)) gs)
+                                     else if p == dst then Offer  (finToNat src) (map (\(l,a,g) => (l,a, project g p)) gs)
+                                     else case gs of
+                                            ((_, _, g) :: _) => project g p
+                                            [] => Close
 
 
-recv : Serialise ty => (1 chan : Channel (Recv src ty next)) -> L IO {use=1} (Res ty (\val => Channel (next val)))
-recv chan = do _ <- putStrLn "Receiving value"
-               v <- getLine
-               Just v' <- pure $ parse {a=ty} v | Nothing => recv chan
-               x <- pure1 (PopMessage chan v')
-               pure1 (v' # x)
 
+getChannel : Global n -> (p : Fin n) -> Type
+getChannel g p = Channel (project g p)
 
-close : (1 chan : Channel Close) -> L IO ()
-close CloseChannel = pure ()
-close (CreateChannel Close) = pure ()
-
-
-Example : Global ()
-Example = Message 1 2 Int $
-          Message 2 3 Int $
-          Message 3 1 Int $
-          Done
-
-
-example1 : (1 chan : ProjectToChannel Example 1) -> L IO ()
-example1 chan = do chan <- send chan 5
-                   res # chan <- recv chan
-                   close chan
-
-init : L IO ()
-init = example1 (CreateChannel $ Project Example 1)
