@@ -8,6 +8,8 @@ depends   = base, linear
 modules = BinarySessionTypes
         , MultiPartySessionTypes
         , Serialise
+        , Sorts
+        , Utils
         , Main
 
 
