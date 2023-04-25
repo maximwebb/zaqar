@@ -13,16 +13,16 @@ Example = Message 0 1 [(NatTy,  Message 1 2 [
                     ]
 
 -- Fails without merging
--- MergeExample : Global 3
--- MergeExample = Message 0 1 [(NatTy,  Message 1 2 [
---                                               (BoolTy, Done), 
---                                               (NatTy, Done)
---                                               ]),
---                        (BoolTy, Message 1 2 [
---                                               (NatTy, Done), 
---                                               (NatTy, Done)
---                                              ])
---                     ]
+MergeExample : Global 3
+MergeExample = Message 0 1 [(NatTy,  Message 1 2 [
+                                              (BoolTy, Done), 
+                                              (NatTy, Done)
+                                              ]),
+                       (BoolTy, Message 1 2 [
+                                              (NatTy, Done), 
+                                              (NatTy, Done)
+                                             ])
+                    ]
 
 a1 : Actions
 a1 = Offer 5 [(NatTy, Close)]
