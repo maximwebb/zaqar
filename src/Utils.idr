@@ -3,6 +3,7 @@ module Utils
 import Data.Fin
 import Data.List.Elem
 import Data.List
+import Data.List.Quantifiers
 import Decidable.Equality
 
 public export
@@ -23,27 +24,28 @@ data PairwiseEqual : List (a, a) -> Type where
 public export
 allFins : (k : Nat) -> List (Fin k)
 allFins 0 = []
-allFins (S k) = FZ :: (FS <$> allFins k)
+allFins (S k) = FZ :: (FS <$> Utils.allFins k)
 
 public export
 mapCong : (p : a -> b) -> (prf : Elem x xs) -> (Elem (p x) (p <$> xs))
 mapCong p Here = Here
 mapCong p (There prf1) = There (mapCong p prf1)
 
+
 public export
-pInAllFins : {k : Nat} -> (p : Fin k) -> (Elem p (allFins k))
+mapPreservesNonEmpty : (xs : List a) -> (f : a -> b) -> (prf : NonEmpty xs) -> (NonEmpty (f <$> xs))
+mapPreservesNonEmpty (h :: t) f prf = IsNonEmpty
+
+
+public export
+pInAllFins : {k : Nat} -> (p : Fin k) -> (Elem p (Utils.allFins k))
 pInAllFins FZ     = Here
 pInAllFins (FS n) = There (mapCong FS $ pInAllFins n)
 
 
 public export
-equalToSo : {a : Fin n} -> {b : Fin n} -> (prf : a = b) -> (So (a == b))
-equalToSo {a=FZ} {b=FZ} prf = Oh
-equalToSo {a=(FS x)} {b=(FS y)} prf = equalToSo (injective prf)
-
-public export
 getDistinct : {k : Nat} -> (x : Fin k) -> (y : Fin k) -> List (Fin k)
-getDistinct x y = filter (\z => z /= x && z /= y) (allFins k)
+getDistinct x y = filter (\z => z /= x && z /= y) (Utils.allFins k)
 
 public export
 filterPreservesMembership : (x : a)
@@ -67,7 +69,7 @@ getDistinctContains : {k : Nat}
                     -> {auto prf : So (not (p == src) && Delay (p /= dst))}
                     -> Elem p (getDistinct src dst)
 getDistinctContains src dst p {prf=prf} = 
-    filterPreservesMembership p (allFins k) (\z => not (z == src) && Delay (z /= dst)) (pInAllFins p)
+    filterPreservesMembership p (Utils.allFins k) (\z => not (z == src) && Delay (z /= dst)) (pInAllFins p)
 
 
 public export
@@ -104,26 +106,3 @@ data Joinable : Eq ix => List (ix, a) -> List (ix, a) -> Type where
               -> (l2 : List (ix, a)) 
               -> {prf : PairwiseEqual (innerJoin l1 l2)}
               -> Joinable l1 l2
-
-
-public export
-sym : Eq ix => {l1 : List (ix, a)} 
-            -> {l2 : List (ix, a)} 
-            -> (Joinable l1 l2) 
-            -> (Joinable l2 l1)
-sym (IsJoinable l1 l2 {prf}) with (innerJoin l1 l2) proof prf1
-    _ | ls with (sym $ innerJoinCommutes {l1} {l2})
-        _ | prf2 with (sym $ trans prf2 prf1)
-            _ | prf3 with (replace {p=PairwiseEqual} prf3 prf)
-                _ | prf4 = IsJoinable l2 l1 {prf=prf4}
-
-
-
-l1 : List (Nat, String)
-l1 = [(1, "gold"), (2, "black"), (3, "red")]
-
-l2 : List (Nat, String)
-l2 = [(1, "gold"), (3, "red"), (1, "beard")]
-
-l3 : List (String, String)
-l3 = innerJoin l2 l1

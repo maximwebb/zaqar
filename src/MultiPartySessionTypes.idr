@@ -11,6 +11,9 @@ import public Data.List
 import public Data.List.Quantifiers
 import public Decidable.Equality
 
+data Peer : Nat -> Type where
+    MkPeer : Fin k -> Peer k
+
 
 public export
 data Actions : Type where
@@ -49,58 +52,30 @@ data Mergeable : (a1 : Actions) -> (a2 : Actions) -> Type where
 
 
 public export
-sym : Mergeable a1 a2 -> Mergeable a2 a1
-sym (EqActions a1 a2 {eq}) = EqActions a2 a1 {eq=(sym eq)}
-sym (MergeActions a1 a2 {eq} {join}) = MergeActions a2 a1 {eq=(sym eq)} {join=(sym join)}
-
-
-public export
-data AllMergeable : List Actions -> Type where
-    AllMergeEmpty  : AllMergeable []
-    AllMergeCons   : (a : Actions) 
-                  -> AllMergeable as
-                  -> (All (\v => Mergeable a v) as)
-                  -> AllMergeable (a :: as)
-
-
-public export
 merge : (a1 : Actions) -> (a2 : Actions) -> {auto prf : Mergeable a1 a2} -> Actions
 merge a1 a2 {prf=prf} = case prf of
-                EqActions a1 a2 => a1
-                MergeActions a1 a2 => Offer (getSrc a1) (union (getChoices a1) (getChoices a2))
+                EqActions _ _ => a1
+                MergeActions _ _ => Offer (getSrc a1) (union (getChoices a1) (getChoices a2))
 
 
-mergeId : (a : Actions) -> a = merge a a
-mergeId a with (merge a a)
-    _ | x = Refl
+mutual
+    public export
+    data AllMergeable : List Actions -> Type where
+        AllMergeEmpty  : AllMergeable []
+        AllMergeSingle : (a : Actions) -> AllMergeable [a]
+        AllMergeCons   : (a : Actions)
+                      -> NonEmpty as
+                      => {mrgPrf : AllMergeable as}
+                      -> {mrgRedPrf : Mergeable a (mergeReduce as)}
+                      -> AllMergeable (a :: as)
 
 
-%hint
-mergePreserves : {0 a1 : Actions} -> {0 a2 : Actions} -> {0 a3 : Actions}
-              -> (m12 : Mergeable a1 a2)
-              -> (m13 : Mergeable a1 a3)
-              -> (m23 : Mergeable a2 a3)
-              -> Mergeable (merge a1 a2) a3
-mergePreserves _ _ = believe_me
+    public export
+    mergeReduce : (as : List Actions) -> {auto prf : AllMergeable as} -> NonEmpty as => Actions
+    mergeReduce [a] = a
+    mergeReduce (a :: a' :: as) {prf} with (prf)
+        _ | AllMergeCons _ {mrgPrf} {mrgRedPrf} = merge a (mergeReduce (a' :: as))
 
-
-public export
-allTail : (All p (x :: xs)) -> All p xs
-allTail (_ :: t) = t
-
-
-public export
-mergeAll : (as : List Actions) -> {auto prf : AllMergeable as} -> Actions
-mergeAll [] = Close
-mergeAll [a] = a
-mergeAll (a1 :: a2 :: as) {prf} with (prf)
-  _ | AllMergeCons _ prf1 all_prf1 with (prf1)
-    _ | AllMergeCons _ prf3 all_prf2 with (indexAll Here all_prf1)
-      _ | m12 with (merge a1 a2) proof m_lab
-        _ | m with (allTail all_prf1)
-          _ | all_prf3 with (zipPropertyWith (mergePreserves m12) all_prf3 all_prf2)
-            _ | all_prf4 with (replace {p=(\r => All (\v => Mergeable r v) as)} (m_lab) all_prf4)
-              _ | all_prf5 = mergeAll (m::as) {prf=(AllMergeCons m prf3 all_prf5)}
 
 mutual
     public export
@@ -108,21 +83,22 @@ mutual
         Done      : Global n
         Message   : (src : Fin n) -> (dst : Fin n)
                  -> (gs : List (Sort, Global n))
-                 -> NonEmpty gs
-                 => {auto prf : All (\p => AllMergeable ((\choice => project (snd choice) p) <$> gs)) (getDistinct src dst)}
+                 -> {auto nonEmp : NonEmpty gs}
+                 -> {auto prf : All (\p => AllMergeable ((\choice => project (snd choice) p) <$> gs)) (getDistinct src dst)}
                  -> Global n
 
     public export
     project : {n : Nat} -> (g : Global n) -> (p : Fin n) -> Actions
     project Done _ = Close
-    project {n=n} (Message src dst gs {prf=prf}) p with (p /= src) proof eq1
+    project {n=n} (Message src dst gs {prf=prf} {nonEmp = nonEmp}) p with (p /= src) proof eq1
         _ | False = Select (finToNat dst) (map (\(s,g) => (s, project g p)) gs)
         _ | True with (p /= dst) proof eq2
             _ | False = Offer  (finToNat src) (map (\(s,g) => (s, project g p)) gs)
             _ | True = let ne_prf = andSo (eqToSo eq1, eqToSo eq2) in
                        let prf1 = getDistinctContains src dst p in
                        let merge_prf = indexAll prf1 prf in
-                           mergeAll ((\choice => project (snd choice) p) <$> gs) {prf=merge_prf}
+                       let nonEmpPrf = mapPreservesNonEmpty gs (\choice => project (snd choice) p) nonEmp in
+                           mergeReduce ((\choice => project (snd choice) p) <$> gs)
 
 
 public export
@@ -152,5 +128,3 @@ popMessage : (1 _ : Channel (Offer src choices))
 public export
 close : (1 chan : Channel Close) -> L IO ()
 close (MkChannel Close) = pure ()
-
-

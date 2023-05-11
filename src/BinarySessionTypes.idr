@@ -16,15 +16,14 @@ data Actions : Type where
 
 
 data Channel : Actions -> Type where
-    CloseChannel  : Channel Close
-    CreateChannel : (actions : Actions) -> Channel actions
+    MkChannel : (actions : Actions) -> Channel actions
 
 
 PushMessage : Serialise ty => (1 _ : Channel (Send ty next)) -> (v : ty) -> Channel (next v)
-PushMessage (CreateChannel (Send ty next)) v = CreateChannel (next v)
+PushMessage (MkChannel (Send ty next)) v = MkChannel (next v)
 
 PopMessage : Serialise ty => (1 _ : Channel (Recv ty next)) -> (v : ty) -> Channel (next v)
-PopMessage (CreateChannel (Recv ty next)) v = CreateChannel (next v)
+PopMessage (MkChannel (Recv ty next)) v = MkChannel (next v)
 
 
 namespace Proto
@@ -76,8 +75,7 @@ recv chan = do _ <- putStrLn "Receiving value"
 
 
 close : (1 chan : Channel Close) -> L IO ()
-close CloseChannel = pure ()
-close (CreateChannel Close) = pure ()
+close (MkChannel Close) = pure ()
 
 
 fork : ((1 chan : Server p) -> L IO ()) -> L IO {use=1} (Client p)
@@ -102,7 +100,7 @@ Utils = Proto.do cmd <- Request Command
                  case cmd of
                     Add     => Proto.do _ <- Request (Int, Int)
                                         _ <- Respond Int
-                                        Done
+                                        Utils
                     Reverse => Proto.do _ <- Request String
                                         _ <- Respond String
                                         Done
@@ -112,7 +110,7 @@ utilServer chan = do cmd # chan <- recv chan
                      case cmd of
                           Add     => do (x, y) # chan <- recv chan
                                         chan <- send chan (x + y)
-                                        close chan
+                                        utilServer chan
                           Reverse => do str # chan <- recv chan
                                         chan <- send chan (reverse str)
                                         close chan
@@ -120,4 +118,4 @@ utilServer chan = do cmd # chan <- recv chan
 
 
 init : L IO ()
-init = utilServer (CreateChannel $ AsServer Utils)
+init = utilServer (MkChannel $ AsServer Utils)
