@@ -61,7 +61,6 @@ merge a1 a2 {prf=prf} = case prf of
 mutual
     public export
     data AllMergeable : List Actions -> Type where
-        AllMergeEmpty  : AllMergeable []
         AllMergeSingle : (a : Actions) -> AllMergeable [a]
         AllMergeCons   : (a : Actions)
                       -> NonEmpty as
@@ -73,8 +72,8 @@ mutual
     public export
     mergeReduce : (as : List Actions) -> {auto prf : AllMergeable as} -> NonEmpty as => Actions
     mergeReduce [a] = a
-    mergeReduce (a :: a' :: as) {prf} with (prf)
-        _ | AllMergeCons _ {mrgPrf} {mrgRedPrf} = merge a (mergeReduce (a' :: as))
+    mergeReduce (a :: a' :: as) {prf} = case prf of
+        AllMergeCons _ {mrgPrf} {mrgRedPrf} => merge a (mergeReduce (a' :: as))
 
 
 mutual
