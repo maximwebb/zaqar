@@ -46,8 +46,8 @@ data Mergeable : (a1 : Actions) -> (a2 : Actions) -> Type where
     MergeActions : (a1 : Actions) -> (a2 : Actions)
                 -> IsOffer a1
                 => IsOffer a2
-                => {eq: (getSrc a1) = (getSrc a2)}
-                -> {join : Joinable (getChoices a1) (getChoices a2)}
+                => {auto eq: (getSrc a1) = (getSrc a2)}
+                -> {auto join : Joinable (getChoices a1) (getChoices a2)}
                 -> Mergeable a1 a2
 
 
@@ -73,7 +73,7 @@ mutual
     mergeReduce : (as : List Actions) -> {auto prf : AllMergeable as} -> NonEmpty as => Actions
     mergeReduce [a] = a
     mergeReduce (a :: a' :: as) {prf} = case prf of
-        AllMergeCons _ {mrgPrf} {mrgRedPrf} => merge a (mergeReduce (a' :: as))
+        AllMergeCons _ => merge a (mergeReduce (a' :: as))
 
 
 mutual
@@ -83,19 +83,19 @@ mutual
         Message   : (src : Fin n) -> (dst : Fin n)
                  -> (gs : List (Sort, Global n))
                  -> {auto nonEmp : NonEmpty gs}
-                 -> {auto prf : All (\p => AllMergeable ((\choice => project (snd choice) p) <$> gs)) (getDistinct src dst)}
+                 -> {auto prf : All (\p => AllMergeable ((\choice => project (snd choice) p) <$> gs)) (getUninvolved src dst)}
                  -> Global n
 
     public export
     project : {n : Nat} -> (g : Global n) -> (p : Fin n) -> Actions
     project Done _ = Close
-    project {n=n} (Message src dst gs {prf=prf} {nonEmp = nonEmp}) p with (p /= src) proof eq1
+    project {n=n} (Message src dst gs {prf=prf} {nonEmp = nonEmp}) p with (p /= src) proof neq1
         _ | False = Select (finToNat dst) (map (\(s,g) => (s, project g p)) gs)
-        _ | True with (p /= dst) proof eq2
+        _ | True with (p /= dst) proof neq2
             _ | False = Offer  (finToNat src) (map (\(s,g) => (s, project g p)) gs)
-            _ | True = let ne_prf = andSo (eqToSo eq1, eqToSo eq2) in
-                       let prf1 = getDistinctContains src dst p in
-                       let merge_prf = indexAll prf1 prf in
+            _ | True = let neqPrf = andSo (eqToSo neq1, eqToSo neq2) in
+                       let elem = getUninvolvedElem src dst p in
+                       let mergePrf = indexAll elem prf in
                        let nonEmpPrf = mapPreservesNonEmpty gs (\choice => project (snd choice) p) nonEmp in
                            mergeReduce ((\choice => project (snd choice) p) <$> gs)
 

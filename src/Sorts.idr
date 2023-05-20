@@ -1,26 +1,25 @@
 module Sorts
 
 public export
-data Sort = NatTy | IntTy | StrTy | BoolTy | Quote | Contrib | Acc | Rej
+data IsSort : Type -> Type where
+    MkNat : IsSort Nat
+    MkStr : IsSort String
+    MkBool : IsSort Bool
+
+
+public export
+data Sort : Type where
+    Ty : (a : Type) -> {auto prf : IsSort a} -> Sort
+
+
+public export
+(==) : (a, b : Type) -> {auto prf1 : IsSort a} -> {auto prf2 : IsSort b} -> Bool
+(==) .(_) .(_) {prf1=MkNat} {prf2=MkNat} = True
+(==) .(_) .(_) {prf1=MkStr} {prf2=MkStr} = True
+(==) .(_) .(_) {prf1=MkBool} {prf2=MkBool} = True
+(==) _ _ = False
+
 
 public export
 Eq Sort where
-    NatTy  == NatTy  = True
-    IntTy  == IntTy  = True
-    StrTy  == StrTy  = True
-    BoolTy == BoolTy = True
-    Quote == Quote = True
-    Contrib == Contrib = True
-    Acc == Acc = True
-    Rej == Rej = True
-    _      == _      = False
-
-public export
-SortToType : Sort -> Type
-SortToType NatTy  = Nat
-SortToType IntTy  = Int
-SortToType StrTy  = String
-SortToType BoolTy = Bool
-SortToType Quote = Nat
-SortToType Contrib = Nat
-SortToType _ = Unit
+    (==) (Ty a) (Ty b) = a == b
