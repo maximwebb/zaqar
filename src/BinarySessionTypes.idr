@@ -6,13 +6,14 @@ import Control.Linear.LIO
 import Data.List.Quantifiers
 import Data.List1
 import Data.String
-
+-- %default total
 
 
 data Actions : Type where
-    Send  : (a : Type) -> (a -> Actions) -> Actions
-    Recv  : (a : Type) -> (a -> Actions) -> Actions
-    Close : Actions
+    Send   : (a : Type) -> (a -> Actions) -> Actions
+    Recv   : (a : Type) -> (a -> Actions) -> Actions
+    RecLoc : Inf Actions -> Actions
+    Close  : Actions
 
 
 data Channel : Actions -> Type where
@@ -32,6 +33,7 @@ namespace Proto
         Request : (a : Type) -> Protocol a
         Respond : (a : Type) -> Protocol a
         (>>=)   : Protocol a -> (a -> Protocol b) -> Protocol b
+        Rec     : Inf (Protocol a) -> Protocol a
         Done    : Protocol ()
 
 
@@ -40,6 +42,7 @@ ClientCont : Protocol a -> (a -> Actions) -> Actions
 ClientCont (Request a) k = Send a k
 ClientCont (Respond a) k = Recv a k
 ClientCont (x >>= f)   k = ClientCont x ((\c => ClientCont c k) . f)
+ClientCont (Rec p)     k = RecLoc (ClientCont p k)
 ClientCont Done        k = k ()
 
 
@@ -47,6 +50,7 @@ ServerCont : Protocol a -> (a -> Actions) -> Actions
 ServerCont (Request a) k = Recv a k
 ServerCont (Respond a) k = Send a k
 ServerCont (x >>= f)   k = ServerCont x ((\c => ServerCont c k) . f)
+ServerCont (Rec p)     k = RecLoc (ServerCont p k)
 ServerCont Done        k = k ()
 
 
@@ -72,6 +76,10 @@ recv chan = do _ <- putStrLn "Receiving value"
                Just v' <- pure $ parse {a=ty} v | Nothing => recv chan
                x <- pure1 (PopMessage chan v')
                pure1 (v' # x)
+
+
+unwrap : {next : Actions} -> (1 chan : Channel (RecLoc (Delay next))) -> L IO {use=1} (Channel next)
+unwrap (MkChannel (RecLoc (Delay v))) = pure1 (MkChannel (force v))
 
 
 close : (1 chan : Channel Close) -> L IO ()
@@ -100,7 +108,7 @@ Utils = Proto.do cmd <- Request Command
                  case cmd of
                     Add     => Proto.do _ <- Request (Int, Int)
                                         _ <- Respond Int
-                                        Utils
+                                        Done
                     Reverse => Proto.do _ <- Request String
                                         _ <- Respond String
                                         Done
@@ -110,12 +118,24 @@ utilServer chan = do cmd # chan <- recv chan
                      case cmd of
                           Add     => do (x, y) # chan <- recv chan
                                         chan <- send chan (x + y)
-                                        utilServer chan
+                                        close chan
                           Reverse => do str # chan <- recv chan
                                         chan <- send chan (reverse str)
                                         close chan
 
 
+Ping : Protocol ()
+Ping = Proto.do _ <- Respond String
+                _ <- Request String
+                Rec Ping
+
+
+pingServer : (1 chan : Server Ping) -> L IO ()
+pingServer chan = do chan <- send chan "ping"
+                     res # chan <- recv chan
+                     chan <- (unwrap chan)
+                     pingServer chan
+
 
 init : L IO ()
-init = utilServer (MkChannel $ AsServer Utils)
+init = pingServer (MkChannel $ AsServer Ping)

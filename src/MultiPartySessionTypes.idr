@@ -17,9 +17,9 @@ data Peer : Nat -> Type where
 
 public export
 data Actions : Type where
-    Select  : (dst : Nat) -> (List (Sort, Actions)) -> Actions
-    Offer   : (src : Nat) -> (List (Sort, Actions)) -> Actions
-    Close   : Actions
+    Select   : (dst : Nat) -> (List (Sort, Actions)) -> Actions
+    Offer    : (src : Nat) -> (List (Sort, Actions)) -> Actions
+    Close    : Actions
     
 
 -- Predicate for testing if an Action is an Offer
@@ -122,6 +122,14 @@ public export
 popMessage : (1 _ : Channel (Offer src choices))
            -> {next : Actions}
            -> Channel next
+
+
+public export
+send : (1 chan : Channel (Select dst choices)) 
+     -> (val : t)
+     -> IsSort t
+     => ElemSort (Ty t) choices
+     => L IO {use=1} (Channel (findBySort (Ty t) choices))
 
 
 public export

@@ -23,6 +23,19 @@ data PairwiseEqual : List (a, a) -> Type where
 
 
 public export
+data ElemSort : Sort -> List (Sort, a) -> Type where
+    ESHere  : ElemSort s ((s, _) :: _)
+    ESThere : ElemSort s cs -> ElemSort s (c :: cs)
+
+
+public export
+findBySort : (s : Sort) -> (cs : List (Sort, a)) -> {auto prf : ElemSort s cs} -> a
+findBySort _ ((_, v) :: _) {prf=ESHere} = v
+findBySort s (_ :: cs) {prf=ESThere prf'} = findBySort s cs {prf=prf'}
+
+
+
+public export
 allFins : (k : Nat) -> List (Fin k)
 allFins 0 = []
 allFins (S k) = FZ :: (FS <$> Utils.allFins k)

@@ -1,4 +1,5 @@
 import MultiPartySessionTypes
+%default total
 
 
 -- Fails without merging
@@ -23,3 +24,13 @@ a2 = Offer 5 [(Ty Nat, Close)]
 
 as : List Actions
 as = [a1, a2]
+
+
+peer0 : (1 chan : getChannel MergeExample 0) -> L IO ()
+peer0 c = do
+            c <- send c True
+            close c
+
+
+nats : Nat -> Stream Nat
+nats n = n :: (nats (S n))
